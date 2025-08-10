@@ -1,0 +1,14 @@
+
+/node_modules
+/.serverless
+/.dynamodb
+/swagger
+/.webpack # Si usas Webpack
+
+npm-debug.log*
+.DS_Store
+
+.env*
+
+.vscode/
+.idea/

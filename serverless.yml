@@ -1,0 +1,135 @@
+service: reto-rimac
+
+provider:
+  name: aws
+  runtime: nodejs20.x
+  region: us-east-1
+  environment:
+    TABLE_NAME: FusionadosTable
+  tracing:
+    lambda: true
+  iamRoleStatements:
+    - Effect: Allow
+      Action:
+        - dynamodb:PutItem
+        - dynamodb:GetItem
+        - dynamodb:UpdateItem
+        - dynamodb:DeleteItem
+        - dynamodb:Query
+        - dynamodb:Scan
+      Resource: 
+        - "arn:aws:dynamodb:${self:provider.region}:*:table/${self:provider.environment.TABLE_NAME}"
+        - "arn:aws:dynamodb:${self:provider.region}:*:table/${self:provider.environment.TABLE_NAME}/index/*"
+  apiGateway:
+    usagePlan:
+      throttle:
+        rateLimit: 1 
+        burstLimit: 3
+      quota:
+        limit: 100
+        period: DAY
+plugins:
+  - serverless-auto-swagger
+  - serverless-offline
+  - serverless-dynamodb
+custom:
+  autoswagger:
+    apiKeyHeaders: ['Authorization']
+  serverless-offline:
+    noPrependStageInUrl: true
+  dynamodb:
+    stages:
+      - dev
+    start:
+      port: 8000
+      inMemory: true
+      migrate: true
+    migration:
+      tables:
+        - FusionadosTable
+  models:
+      - name: PlanetaFusionado
+        description: Datos de un planeta fusionados de varias fuentes.
+        contentType: application/json
+        schema:
+          type: object
+          properties:
+            id:
+              type: string
+            nombrePlaneta:
+              type: string
+            elevacion:
+              type: number
+            timestamp:
+              type: number
+            tipo:
+              type: string
+functions:
+  generarToken:
+    handler: src/services/jwtGenerator.handler
+    events:
+      - http:
+          path: token
+          method: get
+  jwtAuthorizer:
+    handler: src/services/jwtAuthorizer.handler
+  fusionados:
+    handler: src/handlers/fusionados.handler
+    memorySize: 512
+    timeout: 15
+    events:
+      - http:
+          path: fusionados
+          method: get
+          authorizer:
+            name: jwtAuthorizer
+            type: token
+            identitySource: method.request.header.Authorization
+          request:
+            parameters:
+              querystrings:
+                planet: true
+
+  almacenar:
+    handler: src/handlers/almacenar.handler
+    memorySize: 256
+    timeout: 5
+    events:
+      - http:
+          path: almacenar
+          method: post
+          authorizer:
+            name: jwtAuthorizer
+            type: token
+            identitySource: method.request.header.Authorization
+          request:
+            parameters:
+              headers:
+                Content-Type: true
+
+  historial:
+    handler: src/handlers/historial.handler
+    memorySize: 256
+    timeout: 10
+    events:
+      - http:
+          path: historial
+          method: get
+          authorizer:
+            name: jwtAuthorizer
+            type: token
+            identitySource: method.request.header.Authorization
+
+resources:
+  Resources:
+    FusionadosTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:provider.environment.TABLE_NAME}
+        AttributeDefinitions:
+          - AttributeName: id
+            AttributeType: S
+        KeySchema:
+          - AttributeName: id
+            KeyType: HASH
+        BillingMode: PAY_PER_REQUEST
