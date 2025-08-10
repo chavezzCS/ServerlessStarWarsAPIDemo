@@ -9,6 +9,6 @@ npm-debug.log*
 .DS_Store
 
 .env*
-
+/undefined
 .vscode/
 .idea/
